@@ -97,7 +97,7 @@ body {
   color: #94a3b8;
 }
 
-/* --- Scrubbing Controls Styling --- */
+/* Control Bar Styles */
 .controls-card {
   background: #1e293b;
   padding: 16px 24px;
@@ -114,26 +114,21 @@ body {
   gap: 12px;
 }
 
-.scrubber-slider {
+.timeline-slider {
   flex: 1;
   height: 8px;
   border-radius: 4px;
-  background: #334155;
+  background: #475569;
   outline: none;
   cursor: pointer;
   accent-color: #ef4444;
 }
 
-.control-buttons-row {
+.button-group {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
-}
-
-.playback-controls {
-  display: flex;
-  gap: 8px;
-  align-items: center;
+  gap: 16px;
 }
 
 .btn-ctrl {
@@ -150,39 +145,73 @@ body {
   transition: all 0.2s ease;
 }
 
-.btn-ctrl:hover:not(:disabled) {
+.btn-ctrl:hover {
   background: #475569;
+  border-color: #64748b;
 }
 
-.btn-ctrl:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-play {
+.btn-ctrl.btn-primary {
   background: #ef4444;
   border-color: #dc2626;
 }
 
-.btn-play:hover:not(:disabled) {
+.btn-ctrl.btn-primary:hover {
   background: #dc2626;
-}
-
-.speed-select {
-  background: #334155;
-  color: white;
-  padding: 8px 12px;
-  border-radius: 6px;
-  border: 1px solid #475569;
-  cursor: pointer;
 }
 
 .sync-badge {
   padding: 4px 10px;
   border-radius: 4px;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: bold;
 }
 
 .sync-excellent { background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid #10b981; }
-.sync-good { background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid #f59e0b; }
+.sync-acceptable { background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid #f59e0b; }
+
+/* Overlay Canvas Styles */
+.canvas-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.calibration-panel {
+  background: #1e293b;
+  padding: 12px 20px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid #334155;
+  gap: 16px;
+}
+
+.line-slider-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.line-slider-group input[type="range"] {
+  width: 120px;
+  accent-color: #3b82f6;
+}
+
+.toggle-btn {
+  background: #0ea5e9;
+  color: white;
+  border: none;
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.toggle-btn.off {
+  background: #475569;
+}

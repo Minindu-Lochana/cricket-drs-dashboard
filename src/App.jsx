@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
+import { Play, Pause, ChevronLeft, ChevronRight, RotateCcw, Sliders } from 'lucide-react';
 import './App.css';
 
 const API_BASE_URL = 'http://localhost:8000';
@@ -9,18 +10,18 @@ function App() {
   const [selectedClip, setSelectedClip] = useState('');
   const [sideFrames, setSideFrames] = useState([]);
   const [frontFrames, setFrontFrames] = useState([]);
-  
-  // Navigation & Playback States
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [matchedFrontFrame, setMatchedFrontFrame] = useState(null);
-  const [syncInfo, setSyncInfo] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [loading, setLoading] = useState(false);
 
-  const playIntervalRef = useRef(null);
+  // Digital Overlay State
+  const [showOverlay, setShowOverlay] = useState(true);
+  const [offsideX, setOffsideX] = useState(30); // percentage (%)
+  const [legsideX, setLegsideX] = useState(70);  // percentage (%)
 
-  // 1. Fetch available clips
+  const playIntervalRef = useRef(null);
+  const canvasRef = useRef(null);
+
   useEffect(() => {
     fetchClips();
   }, []);
@@ -37,7 +38,6 @@ function App() {
     }
   };
 
-  // 2. Fetch frames for selected clip
   useEffect(() => {
     if (!selectedClip) return;
 
@@ -59,51 +59,18 @@ function App() {
     fetchFrames();
   }, [selectedClip]);
 
-  // 3. Dynamic Frame Sync: Side frame වෙනස් වන විට Front frame match කිරීම
-  useEffect(() => {
-    if (sideFrames.length === 0) return;
-
-    const currentSide = sideFrames[currentIndex];
-    if (!currentSide) return;
-
-    // Front frames තිබේ නම් Closest Timestamp එක සොයාගැනීම
-    if (frontFrames.length > 0) {
-      const targetTs = currentSide.timestamp;
-      let closest = frontFrames[0];
-      let minDiff = Math.abs(frontFrames[0].timestamp - targetTs);
-
-      for (let i = 1; i < frontFrames.length; i++) {
-        const diff = Math.abs(frontFrames[i].timestamp - targetTs);
-        if (diff < minDiff) {
-          minDiff = diff;
-          closest = frontFrames[i];
-        }
-      }
-
-      setMatchedFrontFrame(closest);
-      setSyncInfo({
-        offsetMs: minDiff,
-        quality: minDiff <= 16 ? 'EXCELLENT' : (minDiff <= 35 ? 'GOOD' : 'ACCEPTABLE')
-      });
-    } else {
-      setMatchedFrontFrame(null);
-      setSyncInfo(null);
-    }
-  }, [currentIndex, sideFrames, frontFrames]);
-
-  // 4. Auto-Play Logic
+  // Playback Interval
   useEffect(() => {
     if (isPlaying) {
-      const intervalTime = (1000 / 30) / playbackSpeed; // Standard 30 FPS base scaled by speed
       playIntervalRef.current = setInterval(() => {
-        setCurrentIndex((prev) => {
-          if (prev >= sideFrames.length - 1) {
+        setCurrentIndex((prevIndex) => {
+          if (prevIndex >= sideFrames.length - 1) {
             setIsPlaying(false);
-            return prev;
+            return prevIndex;
           }
-          return prev + 1;
+          return prevIndex + 1;
         });
-      }, intervalTime);
+      }, 50);
     } else {
       if (playIntervalRef.current) clearInterval(playIntervalRef.current);
     }
@@ -111,31 +78,95 @@ function App() {
     return () => {
       if (playIntervalRef.current) clearInterval(playIntervalRef.current);
     };
-  }, [isPlaying, playbackSpeed, sideFrames.length]);
+  }, [isPlaying, sideFrames.length]);
 
-  // Controls Handlers
-  const handleNextFrame = () => {
+  // Keyboard Shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.code === 'ArrowRight') {
+        stepForward();
+      } else if (e.code === 'ArrowLeft') {
+        stepBackward();
+      } else if (e.code === 'Space') {
+        e.preventDefault();
+        setIsPlaying((prev) => !prev);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [sideFrames.length]);
+
+  // Draw Virtual Lines on Canvas
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const width = canvas.width;
+    const height = canvas.height;
+
+    ctx.clearRect(0, 0, width, height);
+
+    if (!showOverlay) return;
+
+    // Draw Offside Line (Blue/Cyan)
+    const offX = (offsideX / 100) * width;
+    ctx.strokeStyle = '#00e5ff';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([6, 6]);
+    ctx.beginPath();
+    ctx.moveTo(offX, 0);
+    ctx.lineTo(offX, height);
+    ctx.stroke();
+
+    // Offside Label
+    ctx.fillStyle = '#00e5ff';
+    ctx.font = '12px Segoe UI';
+    ctx.fillText('OFF WIDE', offX + 5, 20);
+
+    // Draw Legside Line (Red/Pink)
+    const legX = (legsideX / 100) * width;
+    ctx.strokeStyle = '#ff1744';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(legX, 0);
+    ctx.lineTo(legX, height);
+    ctx.stroke();
+
+    // Legside Label
+    ctx.fillStyle = '#ff1744';
+    ctx.fillText('LEG WIDE', legX + 5, 20);
+
+  }, [showOverlay, offsideX, legsideX]);
+
+  const stepForward = () => {
     setIsPlaying(false);
-    if (currentIndex < sideFrames.length - 1) {
-      setCurrentIndex((prev) => prev + 1);
-    }
+    setCurrentIndex((prev) => Math.min(prev + 1, sideFrames.length - 1));
   };
 
-  const handlePrevFrame = () => {
+  const stepBackward = () => {
     setIsPlaying(false);
-    if (currentIndex > 0) {
-      setCurrentIndex((prev) => prev - 1);
-    }
+    setCurrentIndex((prev) => Math.max(prev - 1, 0));
   };
 
-  const togglePlay = () => {
-    if (currentIndex >= sideFrames.length - 1) {
-      setCurrentIndex(0);
-    }
-    setIsPlaying(!isPlaying);
+  const resetFrames = () => {
+    setIsPlaying(false);
+    setCurrentIndex(0);
   };
 
   const currentSideFrame = sideFrames[currentIndex];
+  
+  let matchedFrontFrame = null;
+  let timeDifferenceMs = 0;
+
+  if (currentSideFrame && frontFrames.length > 0) {
+    matchedFrontFrame = frontFrames.reduce((prev, curr) => {
+      const prevDiff = Math.abs(prev.timestamp - currentSideFrame.timestamp);
+      const currDiff = Math.abs(curr.timestamp - currentSideFrame.timestamp);
+      return currDiff < prevDiff ? curr : prev;
+    });
+    timeDifferenceMs = Math.abs(matchedFrontFrame.timestamp - currentSideFrame.timestamp);
+  }
 
   return (
     <div className="dashboard-container">
@@ -143,7 +174,7 @@ function App() {
       <header className="header">
         <div>
           <h2>🏏 3rd Umpire Decision Review System (DRS)</h2>
-          <p style={{ fontSize: '12px', color: '#94a3b8' }}>Dual Camera Frame-by-Frame Analysis Module</p>
+          <p style={{ fontSize: '12px', color: '#94a3b8' }}>Virtual Wide Line Overlay & Review Engine</p>
         </div>
         <div>
           <label style={{ marginRight: '8px', fontSize: '14px' }}>Select Clip:</label>
@@ -159,105 +190,142 @@ function App() {
         </div>
       </header>
 
-      {/* Dual Video Viewports */}
+      {/* Dual Video View */}
       <main className="dual-grid">
         {/* Side View */}
         <div className="video-card">
           <div className="video-header">
-            <span>SIDE VIEW (Batting Crease Selection)</span>
-            <span className="badge badge-side">Master Angle</span>
+            <span>SIDE VIEW (Batting Crease)</span>
+            <span className="badge badge-side">Leg Umpire</span>
           </div>
           <div className="frame-viewport">
             {currentSideFrame ? (
-              <img 
-                src={`${API_BASE_URL}${currentSideFrame.url}`} 
-                alt="Side Frame" 
-              />
+              <img src={`${API_BASE_URL}${currentSideFrame.url}`} alt="Side Frame" />
             ) : (
-              <p>{loading ? 'Loading Frames...' : 'No Side Frames Available'}</p>
+              <p>{loading ? 'Loading...' : 'No Side Frames'}</p>
             )}
           </div>
         </div>
 
-        {/* Front View */}
+        {/* Front View with Digital Canvas Overlay */}
         <div className="video-card">
           <div className="video-header">
-            <span>FRONT VIEW (Synchronized Wide Line View)</span>
-            <span className="badge badge-front">Slave Angle</span>
+            <span>FRONT VIEW (Wide Lines)</span>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              {matchedFrontFrame && (
+                <span className={`sync-badge ${timeDifferenceMs <= 20 ? 'sync-excellent' : 'sync-acceptable'}`}>
+                  Sync Offset: {timeDifferenceMs}ms
+                </span>
+              )}
+              <span className="badge badge-front">Main Umpire</span>
+            </div>
           </div>
           <div className="frame-viewport">
             {matchedFrontFrame ? (
-              <img 
-                src={`${API_BASE_URL}${matchedFrontFrame.url}`} 
-                alt="Front Frame" 
-              />
+              <>
+                <img src={`${API_BASE_URL}${matchedFrontFrame.url}`} alt="Front Frame" />
+                <canvas 
+                  ref={canvasRef} 
+                  width={640} 
+                  height={360} 
+                  className="canvas-overlay"
+                />
+              </>
             ) : (
-              <p>{frontFrames.length === 0 ? 'No Front Frames Uploaded' : 'Matching Frame...'}</p>
+              <p>{loading ? 'Loading...' : 'No Front Frames'}</p>
             )}
           </div>
         </div>
       </main>
 
-      {/* Scrubbing & Playback Controls */}
-      <section className="controls-card">
-        <div className="timeline-container">
-          <span style={{ fontSize: '13px', minWidth: '45px' }}>{currentIndex + 1}</span>
+      {/* Virtual Line Calibration Bar */}
+      <section className="calibration-panel">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Sliders size={18} color="#0ea5e9" />
+          <strong style={{ fontSize: '14px' }}>Wide Line Calibration:</strong>
+        </div>
+        
+        <div className="line-slider-group">
+          <label style={{ color: '#00e5ff' }}>Offside Line:</label>
           <input 
             type="range" 
-            min="0" 
-            max={Math.max(0, sideFrames.length - 1)} 
-            value={currentIndex} 
+            min="5" 
+            max="45" 
+            value={offsideX} 
+            onChange={(e) => setOffsideX(Number(e.target.value))} 
+          />
+          <span>{offsideX}%</span>
+        </div>
+
+        <div className="line-slider-group">
+          <label style={{ color: '#ff1744' }}>Legside Line:</label>
+          <input 
+            type="range" 
+            min="55" 
+            max="95" 
+            value={legsideX} 
+            onChange={(e) => setLegsideX(Number(e.target.value))} 
+          />
+          <span>{legsideX}%</span>
+        </div>
+
+        <button 
+          className={`toggle-btn ${showOverlay ? '' : 'off'}`}
+          onClick={() => setShowOverlay(!showOverlay)}
+        >
+          {showOverlay ? 'Hide DRS Lines' : 'Show DRS Lines'}
+        </button>
+      </section>
+
+      {/* Frame Scrubbing Controls */}
+      <section className="controls-card">
+        <div className="timeline-container">
+          <span style={{ fontSize: '13px', color: '#94a3b8', minWidth: '40px' }}>
+            {currentIndex + 1}
+          </span>
+          <input
+            type="range"
+            min="0"
+            max={Math.max(sideFrames.length - 1, 0)}
+            value={currentIndex}
             onChange={(e) => {
               setIsPlaying(false);
               setCurrentIndex(Number(e.target.value));
             }}
-            className="scrubber-slider"
-            disabled={sideFrames.length === 0}
+            className="timeline-slider"
           />
-          <span style={{ fontSize: '13px', minWidth: '45px', textAlign: 'right' }}>{sideFrames.length}</span>
+          <span style={{ fontSize: '13px', color: '#94a3b8', minWidth: '40px' }}>
+            {sideFrames.length}
+          </span>
         </div>
 
-        <div className="control-buttons-row">
-          <div className="playback-controls">
-            <button className="btn-ctrl" onClick={handlePrevFrame} disabled={currentIndex === 0 || sideFrames.length === 0}>
-              ⏮ Step -1 Frame
-            </button>
-            <button className="btn-ctrl btn-play" onClick={togglePlay} disabled={sideFrames.length === 0}>
-              {isPlaying ? '⏸ Pause' : '▶ Play'}
-            </button>
-            <button className="btn-ctrl" onClick={handleNextFrame} disabled={currentIndex >= sideFrames.length - 1 || sideFrames.length === 0}>
-              Step +1 Frame ⏭
-            </button>
-          </div>
-
-          <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-            {syncInfo && (
-              <div className={`sync-badge sync-${syncInfo.quality.toLowerCase()}`}>
-                Sync: ±{syncInfo.offsetMs}ms ({syncInfo.quality})
-              </div>
-            )}
-
-            <div>
-              <label style={{ marginRight: '8px', fontSize: '13px' }}>Speed:</label>
-              <select 
-                className="speed-select"
-                value={playbackSpeed}
-                onChange={(e) => setPlaybackSpeed(Number(e.target.value))}
-              >
-                <option value={0.25}>0.25x (Slow-Mo)</option>
-                <option value={0.5}>0.5x</option>
-                <option value={1}>1.0x (Normal)</option>
-              </select>
-            </div>
-          </div>
+        <div className="button-group">
+          <button className="btn-ctrl" onClick={resetFrames} title="Reset to Start">
+            <RotateCcw size={16} /> Reset
+          </button>
+          <button className="btn-ctrl" onClick={stepBackward} title="Previous Frame (Left Arrow)">
+            <ChevronLeft size={18} /> Prev Frame
+          </button>
+          <button 
+            className="btn-ctrl btn-primary" 
+            onClick={() => setIsPlaying(!isPlaying)}
+            title="Play / Pause (Spacebar)"
+          >
+            {isPlaying ? <Pause size={18} /> : <Play size={18} />}
+            {isPlaying ? 'Pause' : 'Play'}
+          </button>
+          <button className="btn-ctrl" onClick={stepForward} title="Next Frame (Right Arrow)">
+            Next Frame <ChevronRight size={18} />
+          </button>
         </div>
       </section>
 
       {/* Footer Info */}
       <footer className="footer-info">
-        <span>Active Side Timestamp: <strong>{currentSideFrame ? `${currentSideFrame.timestamp} ms` : 'N/A'}</strong></span>
-        <span>Active Front Timestamp: <strong>{matchedFrontFrame ? `${matchedFrontFrame.timestamp} ms` : 'N/A'}</strong></span>
-        <span>System: <strong style={{ color: '#10b981' }}>Live Frame Engine Active</strong></span>
+        <span>Frame: {sideFrames.length > 0 ? `${currentIndex + 1} / ${sideFrames.length}` : '0 / 0'}</span>
+        <span>Side TS: {currentSideFrame ? `${currentSideFrame.timestamp} ms` : 'N/A'}</span>
+        <span>Front TS: {matchedFrontFrame ? `${matchedFrontFrame.timestamp} ms` : 'N/A'}</span>
+        <span>Status: <strong style={{ color: '#10b981' }}>DRS System Ready</strong></span>
       </footer>
     </div>
   );
