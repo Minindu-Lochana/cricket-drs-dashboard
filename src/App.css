@@ -215,3 +215,82 @@ body {
 .toggle-btn.off {
   background: #475569;
 }
+
+
+/* 3rd Umpire Decision Action Panel */
+.decision-panel {
+  background: #1e293b;
+  padding: 14px 20px;
+  border-radius: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border: 1px solid #334155;
+}
+
+.verdict-btn-group {
+  display: flex;
+  gap: 16px;
+}
+
+.btn-verdict {
+  padding: 10px 24px;
+  border-radius: 6px;
+  border: none;
+  font-weight: 800;
+  font-size: 15px;
+  cursor: pointer;
+  letter-spacing: 0.5px;
+  transition: transform 0.15s ease, filter 0.2s ease;
+}
+
+.btn-verdict:hover {
+  transform: scale(1.04);
+  filter: brightness(1.15);
+}
+
+.btn-wide {
+  background: #ef4444;
+  color: #fff;
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.4);
+}
+
+.btn-not-wide {
+  background: #10b981;
+  color: #fff;
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.4);
+}
+
+/* TV Broadcast Verdict Banner Overlay */
+.broadcast-verdict-overlay {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 12px 36px;
+  border-radius: 8px;
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  z-index: 100;
+  animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6);
+}
+
+.verdict-wide-style {
+  background: linear-gradient(135deg, #dc2626, #991b1b);
+  color: #ffffff;
+  border: 2px solid #f87171;
+}
+
+.verdict-notwide-style {
+  background: linear-gradient(135deg, #059669, #065f46);
+  color: #ffffff;
+  border: 2px solid #34d399;
+}
+
+@keyframes popIn {
+  0% { transform: translateX(-50%) scale(0.5); opacity: 0; }
+  100% { transform: translateX(-50%) scale(1); opacity: 1; }
+}

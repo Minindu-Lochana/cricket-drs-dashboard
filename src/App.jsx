@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import { Play, Pause, ChevronLeft, ChevronRight, RotateCcw, Sliders } from 'lucide-react';
+import { Play, Pause, ChevronLeft, ChevronRight, RotateCcw, Sliders, CheckCircle2, XCircle } from 'lucide-react';
 import './App.css';
 
 const API_BASE_URL = 'http://localhost:8000';
@@ -16,8 +16,11 @@ function App() {
 
   // Digital Overlay State
   const [showOverlay, setShowOverlay] = useState(true);
-  const [offsideX, setOffsideX] = useState(30); // percentage (%)
-  const [legsideX, setLegsideX] = useState(70);  // percentage (%)
+  const [offsideX, setOffsideX] = useState(30);
+  const [legsideX, setLegsideX] = useState(70);
+
+  // 3rd Umpire Verdict State
+  const [verdict, setVerdict] = useState(null); // 'WIDE' | 'NOT_WIDE' | null
 
   const playIntervalRef = useRef(null);
   const canvasRef = useRef(null);
@@ -44,6 +47,7 @@ function App() {
     const fetchFrames = async () => {
       setLoading(true);
       setIsPlaying(false);
+      setVerdict(null);
       try {
         const res = await axios.get(`${API_BASE_URL}/review/${selectedClip}/frames`);
         setSideFrames(res.data.side_frames || []);
@@ -97,7 +101,7 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [sideFrames.length]);
 
-  // Draw Virtual Lines on Canvas
+  // Draw Canvas Lines
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -109,7 +113,7 @@ function App() {
 
     if (!showOverlay) return;
 
-    // Draw Offside Line (Blue/Cyan)
+    // Offside Line
     const offX = (offsideX / 100) * width;
     ctx.strokeStyle = '#00e5ff';
     ctx.lineWidth = 3;
@@ -119,12 +123,11 @@ function App() {
     ctx.lineTo(offX, height);
     ctx.stroke();
 
-    // Offside Label
     ctx.fillStyle = '#00e5ff';
     ctx.font = '12px Segoe UI';
     ctx.fillText('OFF WIDE', offX + 5, 20);
 
-    // Draw Legside Line (Red/Pink)
+    // Legside Line
     const legX = (legsideX / 100) * width;
     ctx.strokeStyle = '#ff1744';
     ctx.lineWidth = 3;
@@ -133,7 +136,6 @@ function App() {
     ctx.lineTo(legX, height);
     ctx.stroke();
 
-    // Legside Label
     ctx.fillStyle = '#ff1744';
     ctx.fillText('LEG WIDE', legX + 5, 20);
 
@@ -168,13 +170,29 @@ function App() {
     timeDifferenceMs = Math.abs(matchedFrontFrame.timestamp - currentSideFrame.timestamp);
   }
 
+  // Handle Verdict Submission
+  const handleDecision = async (decisionType) => {
+    setVerdict(decisionType);
+
+    try {
+      await axios.post(`${API_BASE_URL}/record-decision`, {
+        clip_id: selectedClip,
+        verdict: decisionType,
+        side_timestamp: currentSideFrame ? currentSideFrame.timestamp : 0,
+        front_timestamp: matchedFrontFrame ? matchedFrontFrame.timestamp : 0
+      });
+    } catch (err) {
+      console.error('Failed to record decision:', err);
+    }
+  };
+
   return (
     <div className="dashboard-container">
       {/* Top Header */}
       <header className="header">
         <div>
           <h2>🏏 3rd Umpire Decision Review System (DRS)</h2>
-          <p style={{ fontSize: '12px', color: '#94a3b8' }}>Virtual Wide Line Overlay & Review Engine</p>
+          <p style={{ fontSize: '12px', color: '#94a3b8' }}>Virtual Wide Line Overlay & Broadcast Verdict Engine</p>
         </div>
         <div>
           <label style={{ marginRight: '8px', fontSize: '14px' }}>Select Clip:</label>
@@ -191,7 +209,7 @@ function App() {
       </header>
 
       {/* Dual Video View */}
-      <main className="dual-grid">
+      <main className="dual-grid" style={{ position: 'relative' }}>
         {/* Side View */}
         <div className="video-card">
           <div className="video-header">
@@ -236,9 +254,37 @@ function App() {
             )}
           </div>
         </div>
+
+        {/* Broadcast Verdict Banner */}
+        {verdict && (
+          <div className={`broadcast-verdict-overlay ${verdict === 'WIDE' ? 'verdict-wide-style' : 'verdict-notwide-style'}`}>
+            {verdict === 'WIDE' ? '🔴 DECISION: WIDE GIVEN' : '🟢 DECISION: WIDE NOT GIVEN'}
+          </div>
+        )}
       </main>
 
-      {/* Virtual Line Calibration Bar */}
+      {/* Decision Action Panel */}
+      <section className="decision-panel">
+        <strong style={{ fontSize: '14px' }}>3rd Umpire Decision:</strong>
+        <div className="verdict-btn-group">
+          <button 
+            className="btn-verdict btn-wide" 
+            onClick={() => handleDecision('WIDE')}
+          >
+            <XCircle size={18} style={{ verticalAlign: 'middle', marginRight: '6px' }} />
+            WIDE
+          </button>
+          <button 
+            className="btn-verdict btn-not-wide" 
+            onClick={() => handleDecision('NOT_WIDE')}
+          >
+            <CheckCircle2 size={18} style={{ verticalAlign: 'middle', marginRight: '6px' }} />
+            NOT WIDE (LEGAL)
+          </button>
+        </div>
+      </section>
+
+      {/* Calibration Panel */}
       <section className="calibration-panel">
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <Sliders size={18} color="#0ea5e9" />
@@ -277,7 +323,7 @@ function App() {
         </button>
       </section>
 
-      {/* Frame Scrubbing Controls */}
+      {/* Controls Card */}
       <section className="controls-card">
         <div className="timeline-container">
           <span style={{ fontSize: '13px', color: '#94a3b8', minWidth: '40px' }}>
@@ -300,21 +346,21 @@ function App() {
         </div>
 
         <div className="button-group">
-          <button className="btn-ctrl" onClick={resetFrames} title="Reset to Start">
+          <button className="btn-ctrl" onClick={resetFrames} title="Reset">
             <RotateCcw size={16} /> Reset
           </button>
-          <button className="btn-ctrl" onClick={stepBackward} title="Previous Frame (Left Arrow)">
+          <button className="btn-ctrl" onClick={stepBackward} title="Previous Frame">
             <ChevronLeft size={18} /> Prev Frame
           </button>
           <button 
             className="btn-ctrl btn-primary" 
             onClick={() => setIsPlaying(!isPlaying)}
-            title="Play / Pause (Spacebar)"
+            title="Play / Pause"
           >
             {isPlaying ? <Pause size={18} /> : <Play size={18} />}
             {isPlaying ? 'Pause' : 'Play'}
           </button>
-          <button className="btn-ctrl" onClick={stepForward} title="Next Frame (Right Arrow)">
+          <button className="btn-ctrl" onClick={stepForward} title="Next Frame">
             Next Frame <ChevronRight size={18} />
           </button>
         </div>
@@ -325,7 +371,7 @@ function App() {
         <span>Frame: {sideFrames.length > 0 ? `${currentIndex + 1} / ${sideFrames.length}` : '0 / 0'}</span>
         <span>Side TS: {currentSideFrame ? `${currentSideFrame.timestamp} ms` : 'N/A'}</span>
         <span>Front TS: {matchedFrontFrame ? `${matchedFrontFrame.timestamp} ms` : 'N/A'}</span>
-        <span>Status: <strong style={{ color: '#10b981' }}>DRS System Ready</strong></span>
+        <span>Verdict: <strong style={{ color: verdict === 'WIDE' ? '#ef4444' : (verdict === 'NOT_WIDE' ? '#10b981' : '#94a3b8') }}>{verdict || 'PENDING'}</strong></span>
       </footer>
     </div>
   );
